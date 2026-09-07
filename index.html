@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+  <title>写入膳食营养</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+    }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      background: Canvas;
+      color: CanvasText;
+    }
+    main {
+      width: min(28rem, calc(100% - 3rem));
+      text-align: center;
+    }
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 0.8rem;
+      padding: 0.85rem 1.1rem;
+      background: #0a84ff;
+      color: white;
+      font: inherit;
+      font-weight: 600;
+    }
+    p {
+      line-height: 1.5;
+      opacity: 0.72;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>写入膳食营养</h1>
+    <p id="status">正在打开快捷指令…</p>
+    <button id="open" type="button" hidden>打开快捷指令</button>
+  </main>
+  <script>
+    (() => {
+      const status = document.getElementById("status");
+      const button = document.getElementById("open");
+      const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent)
+        || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+      if (!isIOS) {
+        status.textContent = "请在安装了“写入膳食营养”的 iPhone 或 iPad 上打开此链接。";
+        return;
+      }
+
+      try {
+        const token = location.hash.slice(1);
+        const padded = token.replace(/-/g, "+").replace(/_/g, "/")
+          + "=".repeat((4 - token.length % 4) % 4);
+        const decoded = JSON.parse(atob(padded));
+        const limits = { kcal: 20000, protein_g: 5000, carbs_g: 5000, fat_g: 5000 };
+        const payload = {};
+
+        for (const [key, maximum] of Object.entries(limits)) {
+          if (!Number.isInteger(decoded[key]) || decoded[key] < 0 || decoded[key] > maximum) {
+            throw new Error("invalid nutrition payload");
+          }
+          payload[key] = decoded[key];
+        }
+
+        const iso8601 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/;
+        if (
+          typeof decoded.consumed_at !== "string"
+          || decoded.consumed_at.length > 64
+          || !iso8601.test(decoded.consumed_at)
+          || !Number.isFinite(Date.parse(decoded.consumed_at))
+        ) {
+          throw new Error("invalid consumption time");
+        }
+        payload.consumed_at = decoded.consumed_at;
+
+        const shortcutURL = "shortcuts://run-shortcut"
+          + "?name=" + encodeURIComponent("写入膳食营养")
+          + "&input=text&text=" + encodeURIComponent(JSON.stringify(payload));
+
+        button.hidden = false;
+        button.addEventListener("click", () => location.assign(shortcutURL));
+        setTimeout(() => location.replace(shortcutURL), 100);
+      } catch (error) {
+        status.textContent = "链接中的膳食数据无效，请重新生成。";
+      }
+    })();
+  </script>
+</body>
+</html>
+
